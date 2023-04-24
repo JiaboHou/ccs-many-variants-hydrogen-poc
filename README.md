@@ -38,6 +38,8 @@ npm run build
 
 ## Local development
 
+Visit [Hydrogen Sales Channel Admin](https://admin.shopify.com/store/ccs-poc-variants-limit-testing/custom_storefronts/950563) to fetch the .env file contents
+
 ```bash
 npm run dev
 ```
