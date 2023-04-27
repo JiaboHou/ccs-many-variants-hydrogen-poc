@@ -47,7 +47,7 @@ import {MEDIA_FRAGMENT, PRODUCT_CARD_FRAGMENT} from '~/data/fragments';
 import type {Storefront} from '~/lib/type';
 import type {Product} from 'schema-dts';
 import {routeHeaders, CACHE_SHORT} from '~/data/cache';
-import { Maybe } from 'graphql/jsutils/Maybe';
+import {Maybe} from 'graphql/jsutils/Maybe';
 
 export const headers = routeHeaders;
 
@@ -97,7 +97,10 @@ export async function loader({params, request, context}: LoaderArgs) {
     url: request.url,
   });
 
-  const variants = getAllProductVariants(context.storefront, product.id);
+  const disableCache = 'disableCache';
+  const variants = getAllProductVariants(context.storefront, product.id, {
+    disableCache: searchParams.get(disableCache) === '1',
+  });
 
   return defer(
     {
@@ -693,15 +696,20 @@ async function getRecommendedProducts(
 async function getAllProductVariants(
   storefront: Storefront,
   productId: string,
+  options: {disableCache: boolean} = {disableCache: false},
 ) {
   const variants: Array<ProductVariant> = [];
   let hasNextPage = true;
   let variantsEndCursor = '';
   let requestCount = 0;
 
-
   console.log(`Fetching product variants for ${productId}`);
   const fetchTimes = [];
+
+  const cachePolicy = options.disableCache
+    ? storefront.CacheNone()
+    : storefront.CacheShort();
+  console.log(`disable cache?: ${options.disableCache}`);
   while (hasNextPage && requestCount <= 25) {
     const initialTime = new Date().getTime();
     const query = await storefront.query<{
@@ -712,6 +720,7 @@ async function getAllProductVariants(
         variantsFirst: VARIANT_PAGINATION_LIMIT,
         variantsAfter: variantsEndCursor || undefined,
       },
+      cache: cachePolicy,
     });
     fetchTimes.push(new Date().getTime() - initialTime);
 
@@ -726,7 +735,7 @@ async function getAllProductVariants(
     );
   }
   console.log(
-    `fetch times: ${fetchTimes.join('ms, ')} | sum: ${fetchTimes.reduce(
+    `fetch times: ${fetchTimes.join('ms, ')}ms | sum: ${fetchTimes.reduce(
       (a, b) => a + b,
       0,
     )}ms`,
