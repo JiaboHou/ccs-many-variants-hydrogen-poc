@@ -1,4 +1,4 @@
-import {type ReactNode, useRef, Suspense, useMemo} from 'react';
+import {type ReactNode, useRef, Suspense, useMemo, Fragment} from 'react';
 import {Disclosure, Listbox} from '@headlessui/react';
 import {defer, type LoaderArgs} from '@shopify/remix-oxygen';
 import {
@@ -7,6 +7,7 @@ import {
   useSearchParams,
   useLocation,
   useNavigation,
+  useAsyncValue,
 } from '@remix-run/react';
 
 import {
@@ -314,6 +315,7 @@ function ProductOptions({
   options: ProductType['options'];
   searchParamsWithDefaults: URLSearchParams;
 }) {
+  const {variants} = useLoaderData<typeof loader>();
   const closeRef = useRef<HTMLButtonElement>(null);
   return (
     <>
@@ -336,7 +338,7 @@ function ProductOptions({
                * If there are more than 7 values, we render a dropdown.
                * Otherwise, we just render plain links.
                */}
-              {option.values.length > 7 ? (
+              {/* {option.values.length > 7 ? (
                 <div className="relative w-full">
                   <Listbox>
                     {({open}) => (
@@ -396,29 +398,53 @@ function ProductOptions({
                     )}
                   </Listbox>
                 </div>
-              ) : (
-                <>
-                  {option.values.map((value) => {
-                    const checked =
-                      searchParamsWithDefaults.get(option.name) === value;
-                    const id = `option-${option.name}-${value}`;
+              ) : ( */}
+              <>
+                {option.values.map((value) => {
+                  const checked =
+                    searchParamsWithDefaults.get(option.name) === value;
+                  const id = `option-${option.name}-${value}`;
 
-                    return (
-                      <Text key={id}>
-                        <ProductOptionLink
-                          optionName={option.name}
-                          optionValue={value}
-                          searchParams={searchParamsWithDefaults}
-                          className={clsx(
-                            'leading-none py-1 border-b-[1.5px] cursor-pointer transition-all duration-200',
-                            checked ? 'border-primary/50' : 'border-primary/0',
-                          )}
-                        />
-                      </Text>
-                    );
-                  })}
-                </>
-              )}
+                  return (
+                    <Fragment key={id}>
+                      <Suspense
+                        fallback={
+                          <Text key={id}>
+                            <ProductOptionLink
+                              optionName={option.name}
+                              optionValue={value}
+                              searchParams={searchParamsWithDefaults}
+                              className={clsx(
+                                'leading-none py-1 border-b-[1.5px] cursor-pointer transition-all duration-200',
+                                checked
+                                  ? 'border-primary/50'
+                                  : 'border-primary/0',
+                              )}
+                            />
+                          </Text>
+                        }
+                      >
+                        <Await resolve={variants}>
+                          <Text key={id}>
+                            <ProductOptionLink
+                              optionName={option.name}
+                              optionValue={value}
+                              searchParams={searchParamsWithDefaults}
+                              className={clsx(
+                                'leading-none py-1 border-b-[1.5px] cursor-pointer transition-all duration-200',
+                                checked
+                                  ? 'border-primary/50'
+                                  : 'border-primary/0',
+                              )}
+                            />
+                          </Text>
+                        </Await>
+                      </Suspense>
+                    </Fragment>
+                  );
+                })}
+              </>
+              {/* )} */}
             </div>
           </div>
         ))}
@@ -449,6 +475,35 @@ function ProductOptionLink({
   const clonedSearchParams = new URLSearchParams(searchParams);
   clonedSearchParams.set(optionName, optionValue);
 
+  const variants = useAsyncValue();
+  console.log('variants', variants);
+
+  const associatedVariant = useMemo(
+    () =>
+      (variants ?? [])?.find?.((variant) => {
+        let isMatch = true;
+        // Find the variant that matches the current selected options.
+        variant.selectedOptions.forEach((selectedOption) => {
+          if (selectedOption.name === optionName) {
+            isMatch = isMatch && selectedOption.value === optionValue;
+          } else {
+            const pageSelectedOptionValue = searchParams.get(
+              selectedOption.name,
+            );
+            isMatch =
+              isMatch && selectedOption.value === pageSelectedOptionValue;
+          }
+        });
+
+        return isMatch;
+      }),
+    [optionName, optionValue, searchParams, variants],
+  );
+
+  console.log('associatedVariant', associatedVariant);
+
+  const availableForSale = associatedVariant?.availableForSale ?? true;
+
   return (
     <Link
       {...props}
@@ -457,7 +512,7 @@ function ProductOptionLink({
       replace
       to={`${path}?${clonedSearchParams.toString()}`}
     >
-      {children ?? optionValue}
+      {`${children ?? optionValue}${availableForSale ? '' : ' (Sold Out)'}`}
     </Link>
   );
 }
@@ -635,6 +690,10 @@ const PRODUCT_VARIANT_INVENTORY_QUERY = `#graphql
             amount
             currencyCode
           }
+          selectedOptions {
+            name
+            value
+          }
         }
         pageInfo {
           hasNextPage
@@ -698,18 +757,18 @@ async function getAllProductVariants(
   productId: string,
   options: {disableCache: boolean} = {disableCache: false},
 ) {
-  const variants: Array<ProductVariant> = [];
+  let variants: Array<ProductVariant> = [];
   let hasNextPage = true;
   let variantsEndCursor = '';
   let requestCount = 0;
 
-  console.log(`Fetching product variants for ${productId}`);
+  // console.log(`Fetching product variants for ${productId}`);
   const fetchTimes = [];
 
   const cachePolicy = options.disableCache
     ? storefront.CacheNone()
     : storefront.CacheShort();
-  console.log(`disable cache?: ${options.disableCache}`);
+  // console.log(`disable cache?: ${options.disableCache}`);
   while (hasNextPage && requestCount <= 25) {
     const initialTime = new Date().getTime();
     const query = await storefront.query<{
@@ -722,23 +781,24 @@ async function getAllProductVariants(
       },
       cache: cachePolicy,
     });
+
     fetchTimes.push(new Date().getTime() - initialTime);
 
     invariant(query?.product, 'No data returned from Shopify API');
 
-    variants.concat(query.product?.variants.nodes ?? []);
+    variants = [...variants, ...(query.product?.variants.nodes ?? [])];
     variantsEndCursor = query.product?.variants.pageInfo.endCursor ?? '';
     hasNextPage = query.product?.variants.pageInfo.hasNextPage;
     requestCount += 1;
-    console.log(
-      `Fetched ${query.product?.variants.nodes.length} variants in page #${requestCount}`,
-    );
+    // console.log(
+    //   `Fetched ${query.product?.variants.nodes.length} variants in page #${requestCount}`,
+    // );
   }
-  console.log(
-    `fetch times: ${fetchTimes.join('ms, ')}ms | sum: ${fetchTimes.reduce(
-      (a, b) => a + b,
-      0,
-    )}ms`,
-  );
+  // console.log(
+  //   `fetch times: ${fetchTimes.join('ms, ')}ms | sum: ${fetchTimes.reduce(
+  //     (a, b) => a + b,
+  //     0,
+  //   )}ms`,
+  // );
   return variants;
 }
