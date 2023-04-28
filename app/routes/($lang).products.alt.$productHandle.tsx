@@ -407,23 +407,7 @@ function ProductOptions({
 
                   return (
                     <Fragment key={id}>
-                      <Suspense
-                        fallback={
-                          <Text key={id}>
-                            <ProductOptionLink
-                              optionName={option.name}
-                              optionValue={value}
-                              searchParams={searchParamsWithDefaults}
-                              className={clsx(
-                                'leading-none py-1 border-b-[1.5px] cursor-pointer transition-all duration-200',
-                                checked
-                                  ? 'border-primary/50'
-                                  : 'border-primary/0',
-                              )}
-                            />
-                          </Text>
-                        }
-                      >
+                      <Suspense>
                         <Await resolve={variants}>
                           <Text key={id}>
                             <ProductOptionLink
@@ -457,6 +441,7 @@ function ProductOptionLink({
   optionValue,
   searchParams,
   children,
+  className,
   ...props
 }: {
   optionName: string;
@@ -503,6 +488,10 @@ function ProductOptionLink({
   console.log('associatedVariant', associatedVariant);
 
   const availableForSale = associatedVariant?.availableForSale ?? true;
+  const linkClassNames = clsx(className, {
+    'line-through': !availableForSale,
+    'font-bold': availableForSale,
+  });
 
   return (
     <Link
@@ -510,9 +499,10 @@ function ProductOptionLink({
       preventScrollReset
       prefetch="intent"
       replace
+      className={linkClassNames}
       to={`${path}?${clonedSearchParams.toString()}`}
     >
-      {`${children ?? optionValue}${availableForSale ? '' : ' (Sold Out)'}`}
+      {children ?? optionValue}
     </Link>
   );
 }
