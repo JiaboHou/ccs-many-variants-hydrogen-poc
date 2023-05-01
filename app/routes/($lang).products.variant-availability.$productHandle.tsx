@@ -478,23 +478,13 @@ function ProductOptionLinks({
         const id = `option-${option.name}-${value}`;
 
         const associatedVariant = siblingVariants?.find?.(
-          (variant: ProductVariant) => {
-            let isMatch = true;
+          (variant: ProductVariant) =>
             // Find the variant that matches the current selected options.
-            variant.selectedOptions.forEach((selectedOption) => {
-              if (selectedOption.name === option.name) {
-                isMatch = isMatch && selectedOption.value === value;
-              } else {
-                const pageSelectedOptionValue = searchParams.get(
-                  selectedOption.name,
-                );
-                isMatch =
-                  isMatch && selectedOption.value === pageSelectedOptionValue;
-              }
-            });
-
-            return isMatch;
-          },
+            variant.selectedOptions.some(
+              (selectedOption) =>
+                selectedOption.name === option.name &&
+                selectedOption.value === value,
+            ),
         );
 
         return (
