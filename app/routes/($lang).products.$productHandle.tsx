@@ -1,4 +1,4 @@
-import {type ReactNode, useRef, Suspense, useMemo} from 'react';
+import {type ReactNode, useRef, Suspense, useMemo, Component} from 'react';
 import {Disclosure, Listbox} from '@headlessui/react';
 import {defer, type LoaderArgs} from '@shopify/remix-oxygen';
 import {
@@ -39,6 +39,7 @@ import type {
   Product as ProductType,
   Shop,
   ProductConnection,
+  ProductOption,
 } from '@shopify/hydrogen/storefront-api-types';
 import {MEDIA_FRAGMENT, PRODUCT_CARD_FRAGMENT} from '~/data/fragments';
 import type {Storefront} from '~/lib/type';
@@ -138,7 +139,7 @@ export default function Product() {
                   <Text className={'opacity-50 font-medium'}>{vendor}</Text>
                 )}
               </div>
-              <ProductForm />
+              <ProductForm ProductOptionsComponent={ProductOptions} />
               <div className="grid gap-4 py-4">
                 {descriptionHtml && (
                   <ProductDetail
@@ -179,7 +180,17 @@ export default function Product() {
   );
 }
 
-export function ProductForm() {
+export function ProductForm({
+  ProductOptionsComponent,
+}: {
+  ProductOptionsComponent?: ({
+    options,
+    searchParamsWithDefaults,
+  }: {
+    options: ProductType['options'];
+    searchParamsWithDefaults: URLSearchParams;
+  }) => JSX.Element;
+}) {
   const {product, analytics, storeDomain} = useLoaderData<typeof loader>();
 
   const [currentSearchParams] = useSearchParams();
@@ -237,10 +248,12 @@ export function ProductForm() {
   return (
     <div className="grid gap-10">
       <div className="grid gap-4">
-        <ProductOptions
-          options={product.options}
-          searchParamsWithDefaults={searchParamsWithDefaults}
-        />
+        {ProductOptionsComponent ? (
+          <ProductOptionsComponent
+            options={product.options}
+            searchParamsWithDefaults={searchParamsWithDefaults}
+          />
+        ) : null}
         {selectedVariant && (
           <div className="grid items-stretch gap-4">
             {isOutOfStock ? (
@@ -452,7 +465,7 @@ function ProductOptionLink({
   );
 }
 
-function ProductDetail({
+export function ProductDetail({
   title,
   content,
   learnMore,
@@ -611,7 +624,7 @@ const RECOMMENDED_PRODUCTS_QUERY = `#graphql
   }
 `;
 
-async function getRecommendedProducts(
+export async function getRecommendedProducts(
   storefront: Storefront,
   productId: string,
 ) {
