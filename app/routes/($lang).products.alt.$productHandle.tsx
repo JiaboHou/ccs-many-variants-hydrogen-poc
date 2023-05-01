@@ -1,6 +1,6 @@
 import {type ReactNode, useRef, Suspense, useMemo, Fragment} from 'react';
 import {Disclosure, Listbox} from '@headlessui/react';
-import {defer, type LoaderArgs} from '@shopify/remix-oxygen';
+import {defer, SerializeFrom, type LoaderArgs} from '@shopify/remix-oxygen';
 import {
   useLoaderData,
   Await,
@@ -43,6 +43,8 @@ import type {
   ProductConnection,
   ProductVariantConnection,
   Scalars,
+  ProductOption,
+  SelectedOption,
 } from '@shopify/hydrogen/storefront-api-types';
 import {MEDIA_FRAGMENT, PRODUCT_CARD_FRAGMENT} from '~/data/fragments';
 import type {Storefront} from '~/lib/type';
@@ -399,39 +401,119 @@ function ProductOptions({
                   </Listbox>
                 </div>
               ) : ( */}
-              <>
-                {option.values.map((value) => {
-                  const checked =
-                    searchParamsWithDefaults.get(option.name) === value;
-                  const id = `option-${option.name}-${value}`;
-
-                  return (
-                    <Fragment key={id}>
-                      <Suspense>
-                        <Await resolve={variants}>
-                          <Text key={id}>
-                            <ProductOptionLink
-                              optionName={option.name}
-                              optionValue={value}
-                              searchParams={searchParamsWithDefaults}
-                              className={clsx(
-                                'leading-none py-1 border-b-[1.5px] cursor-pointer transition-all duration-200',
-                                checked
-                                  ? 'border-primary/50'
-                                  : 'border-primary/0',
-                              )}
-                            />
-                          </Text>
-                        </Await>
-                      </Suspense>
-                    </Fragment>
-                  );
-                })}
-              </>
+              <Suspense>
+                <Await resolve={variants}>
+                  <ProductOptionLinks
+                    searchParams={searchParamsWithDefaults}
+                    option={option}
+                  />
+                </Await>
+              </Suspense>
               {/* )} */}
             </div>
           </div>
         ))}
+    </>
+  );
+}
+
+function ProductOptionLinks({
+  option,
+  searchParams,
+}: {
+  option: ProductOption;
+  searchParams: URLSearchParams;
+}) {
+  const {product} = useLoaderData<typeof loader>();
+
+  const variants = useAsyncValue() as Awaited<
+    SerializeFrom<typeof loader>['variants']
+  >;
+
+  // Get list of selected options that are not the current option being rendered by this component.
+  const otherSelectedOptions = useMemo(
+    () =>
+      product.options.reduce<SelectedOption[]>(
+        (acc: SelectedOption[], currOption: ProductOption) => {
+          if (currOption.name === option.name) {
+            return acc;
+          }
+
+          const selectedValue = searchParams.get(currOption.name);
+          invariant(selectedValue, 'Missing option value');
+
+          const selectedOption: SelectedOption = {
+            name: currOption.name,
+            value: selectedValue,
+          };
+
+          return [...acc, selectedOption];
+        },
+        [],
+      ),
+    [product, searchParams, option.name],
+  );
+  // console.log('otherSelectedOptions', otherSelectedOptions)
+
+  // Get list of variants that match otherSelectedOptions.
+  const siblingVariants = useMemo(
+    () =>
+      variants?.filter?.((variant: ProductVariant) =>
+        otherSelectedOptions.every((otherSelectedOption: SelectedOption) =>
+          variant.selectedOptions.some(
+            (selectedOption) =>
+              selectedOption.name === otherSelectedOption.name &&
+              selectedOption.value === otherSelectedOption.value,
+          ),
+        ),
+      ),
+    [otherSelectedOptions, variants],
+  );
+  // console.log('siblingVariants', siblingVariants)
+
+  return (
+    <>
+      {option.values.map((value) => {
+        const checked = searchParams.get(option.name) === value;
+        const id = `option-${option.name}-${value}`;
+
+        const associatedVariant = siblingVariants?.find?.(
+          (variant: ProductVariant) => {
+            let isMatch = true;
+            // Find the variant that matches the current selected options.
+            variant.selectedOptions.forEach((selectedOption) => {
+              if (selectedOption.name === option.name) {
+                isMatch = isMatch && selectedOption.value === value;
+              } else {
+                const pageSelectedOptionValue = searchParams.get(
+                  selectedOption.name,
+                );
+                isMatch =
+                  isMatch && selectedOption.value === pageSelectedOptionValue;
+              }
+            });
+
+            return isMatch;
+          },
+        );
+
+        return (
+          <Fragment key={id}>
+            <Text key={id}>
+              <ProductOptionLink
+                optionName={option.name}
+                optionValue={value}
+                variant={associatedVariant}
+                searchParams={searchParams}
+                className={clsx(
+                  'leading-none py-1 border-b-[1.5px] cursor-pointer transition-all duration-200',
+                  checked ? 'border-primary/50' : 'border-primary/0',
+                )}
+              />
+            </Text>
+          </Fragment>
+        );
+      })}
     </>
   );
 }
@@ -442,11 +524,13 @@ function ProductOptionLink({
   searchParams,
   children,
   className,
+  variant,
   ...props
 }: {
   optionName: string;
   optionValue: string;
   searchParams: URLSearchParams;
+  variant?: ProductVariant;
   children?: ReactNode;
   [key: string]: any;
 }) {
@@ -460,34 +544,8 @@ function ProductOptionLink({
   const clonedSearchParams = new URLSearchParams(searchParams);
   clonedSearchParams.set(optionName, optionValue);
 
-  const variants = useAsyncValue();
-  console.log('variants', variants);
-
-  const associatedVariant = useMemo(
-    () =>
-      (variants ?? [])?.find?.((variant) => {
-        let isMatch = true;
-        // Find the variant that matches the current selected options.
-        variant.selectedOptions.forEach((selectedOption) => {
-          if (selectedOption.name === optionName) {
-            isMatch = isMatch && selectedOption.value === optionValue;
-          } else {
-            const pageSelectedOptionValue = searchParams.get(
-              selectedOption.name,
-            );
-            isMatch =
-              isMatch && selectedOption.value === pageSelectedOptionValue;
-          }
-        });
-
-        return isMatch;
-      }),
-    [optionName, optionValue, searchParams, variants],
-  );
-
-  console.log('associatedVariant', associatedVariant);
-
-  const availableForSale = associatedVariant?.availableForSale ?? true;
+  // Check if the associated variant is available for sale.
+  const availableForSale = variant?.availableForSale ?? true;
   const linkClassNames = clsx(className, {
     'line-through': !availableForSale,
     'font-bold': availableForSale,
@@ -752,7 +810,7 @@ async function getAllProductVariants(
   let variantsEndCursor = '';
   let requestCount = 0;
 
-  // console.log(`Fetching product variants for ${productId}`);
+  console.log(`Fetching product variants for ${productId}`);
   const fetchTimes = [];
 
   const cachePolicy = options.disableCache
@@ -784,11 +842,11 @@ async function getAllProductVariants(
     //   `Fetched ${query.product?.variants.nodes.length} variants in page #${requestCount}`,
     // );
   }
-  // console.log(
-  //   `fetch times: ${fetchTimes.join('ms, ')}ms | sum: ${fetchTimes.reduce(
-  //     (a, b) => a + b,
-  //     0,
-  //   )}ms`,
-  // );
+  console.log(
+    `fetch times: ${fetchTimes.join('ms, ')}ms | sum: ${fetchTimes.reduce(
+      (a, b) => a + b,
+      0,
+    )}ms`,
+  );
   return variants;
 }
