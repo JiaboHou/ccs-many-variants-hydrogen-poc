@@ -88,8 +88,10 @@ export async function loader({params, request, context}: LoaderArgs) {
   });
 
   const disableCache = 'disableCache';
+  const paginationLimit = 'paginationLimit';
   const variants = getAllProductVariants(context.storefront, product.id, {
     disableCache: searchParams.get(disableCache) === '1',
+    paginationLimit: Number(searchParams.get(paginationLimit)),
   });
 
   return defer(
@@ -450,7 +452,7 @@ const PRODUCT_QUERY = `#graphql
   }
 `;
 
-const VARIANT_PAGINATION_LIMIT = 250;
+const VARIANT_PAGINATION_LIMIT = 1000;
 const PRODUCT_VARIANT_INVENTORY_QUERY = `#graphql
   query ProductVariantInventory(
     $productId: ID!
@@ -500,7 +502,13 @@ const PRODUCT_VARIANT_INVENTORY_QUERY = `#graphql
 async function getAllProductVariants(
   storefront: Storefront,
   productId: string,
-  options: {disableCache: boolean} = {disableCache: false},
+  options: {
+    disableCache: boolean;
+    paginationLimit?: number;
+  } = {
+    disableCache: false,
+    paginationLimit: 250,
+  },
 ) {
   let variants: Array<ProductVariant> = [];
   let hasNextPage = true;
@@ -513,7 +521,8 @@ async function getAllProductVariants(
   const cachePolicy = options.disableCache
     ? storefront.CacheNone()
     : storefront.CacheShort();
-  // console.log(`disable cache?: ${options.disableCache}`);
+  console.log(`disable cache?: ${options.disableCache}`);
+  console.log(`pagination limit?: ${options.paginationLimit}`);
   while (hasNextPage && requestCount <= 25) {
     const initialTime = new Date().getTime();
     const query = await storefront.query<{
@@ -521,13 +530,14 @@ async function getAllProductVariants(
     }>(PRODUCT_VARIANT_INVENTORY_QUERY, {
       variables: {
         productId,
-        variantsFirst: VARIANT_PAGINATION_LIMIT,
+        variantsFirst: options.paginationLimit || VARIANT_PAGINATION_LIMIT,
         variantsAfter: variantsEndCursor || undefined,
       },
       cache: cachePolicy,
     });
 
-    fetchTimes.push(new Date().getTime() - initialTime);
+    const timeToFetch = new Date().getTime() - initialTime;
+    fetchTimes.push(timeToFetch);
 
     invariant(query?.product, 'No data returned from Shopify API');
 
@@ -535,15 +545,12 @@ async function getAllProductVariants(
     variantsEndCursor = query.product?.variants.pageInfo.endCursor ?? '';
     hasNextPage = query.product?.variants.pageInfo.hasNextPage;
     requestCount += 1;
-    // console.log(
-    //   `Fetched ${query.product?.variants.nodes.length} variants in page #${requestCount}`,
-    // );
+    console.log(
+      `Fetched ${query.product?.variants.nodes.length} variants for page #${requestCount} in ${timeToFetch}ms`,
+    );
   }
   console.log(
-    `fetch times: ${fetchTimes.join('ms, ')}ms | sum: ${fetchTimes.reduce(
-      (a, b) => a + b,
-      0,
-    )}ms`,
+    `Total time spent fetching: ${fetchTimes.reduce((a, b) => a + b, 0)}ms`,
   );
   return variants;
 }
