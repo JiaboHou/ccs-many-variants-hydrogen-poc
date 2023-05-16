@@ -120,6 +120,9 @@ export default function Product() {
   const {product, shop, recommended} = useLoaderData<typeof loader>();
   const {media, title, vendor, descriptionHtml} = product;
   const {shippingPolicy, refundPolicy} = shop;
+  const variantAvailabilityUrl = globalThis?.window?.location.href
+    ? new URL(globalThis?.window?.location.href)
+    : null;
 
   return (
     <>
@@ -162,6 +165,13 @@ export default function Product() {
                   />
                 )}
               </div>
+              <Link
+                to={`/products/variant-availability/${product.handle}${
+                  variantAvailabilityUrl?.search ?? ''
+                }`}
+              >
+                Go to PDP with variant availability preview
+              </Link>
             </section>
           </div>
         </div>
