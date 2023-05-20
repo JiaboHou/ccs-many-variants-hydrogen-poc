@@ -521,8 +521,10 @@ async function getAllProductVariants(
   const cachePolicy = options.disableCache
     ? storefront.CacheNone()
     : storefront.CacheShort();
-  console.log(`disable cache?: ${options.disableCache}`);
-  console.log(`pagination limit?: ${options.paginationLimit}`);
+  console.log(`disable cache: ${options.disableCache}`);
+
+  const variantsFirst = options.paginationLimit || VARIANT_PAGINATION_LIMIT;
+  console.log(`pagination limit: ${variantsFirst}`);
   while (hasNextPage && requestCount <= 25) {
     const initialTime = new Date().getTime();
     const query = await storefront.query<{
@@ -530,7 +532,7 @@ async function getAllProductVariants(
     }>(PRODUCT_VARIANT_INVENTORY_QUERY, {
       variables: {
         productId,
-        variantsFirst: options.paginationLimit || VARIANT_PAGINATION_LIMIT,
+        variantsFirst,
         variantsAfter: variantsEndCursor || undefined,
       },
       cache: cachePolicy,

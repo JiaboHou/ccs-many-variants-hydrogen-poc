@@ -56,6 +56,9 @@ export function ProductCard({
     quantity: 1,
   };
 
+  const {minVariantPrice, maxVariantPrice} = product?.priceRange ?? {};
+  const showPriceRange = minVariantPrice?.amount !== maxVariantPrice?.amount;
+
   return (
     <div className="flex flex-col gap-2">
       <Link
@@ -92,12 +95,25 @@ export function ProductCard({
             </Text>
             <div className="flex gap-4">
               <Text className="flex gap-4">
-                <Money withoutTrailingZeros data={price!} />
-                {isDiscounted(price as MoneyV2, compareAtPrice as MoneyV2) && (
-                  <CompareAtPrice
-                    className={'opacity-50'}
-                    data={compareAtPrice as MoneyV2}
-                  />
+                {showPriceRange ? (
+                  <>
+                    <Money withoutTrailingZeros data={minVariantPrice!} />
+                    {'-'}
+                    <Money withoutTrailingZeros data={maxVariantPrice!} />
+                  </>
+                ) : (
+                  <>
+                    <Money withoutTrailingZeros data={price!} />
+                    {isDiscounted(
+                      price as MoneyV2,
+                      compareAtPrice as MoneyV2,
+                    ) && (
+                      <CompareAtPrice
+                        className={'opacity-50'}
+                        data={compareAtPrice as MoneyV2}
+                      />
+                    )}
+                  </>
                 )}
               </Text>
             </div>

@@ -9,7 +9,7 @@ import {flattenConnection, AnalyticsPageType} from '@shopify/hydrogen';
 import invariant from 'tiny-invariant';
 import {PageHeader, Section, Text, SortFilter} from '~/components';
 import {ProductGrid} from '~/components/ProductGrid';
-import {PRODUCT_CARD_FRAGMENT} from '~/data/fragments';
+import {PRODUCT_CARD_WITH_GROUP_FRAGMENT} from '~/data/fragments';
 import {CACHE_SHORT, routeHeaders} from '~/data/cache';
 import {seoPayload} from '~/lib/seo.server';
 import type {AppliedFilter, SortParam} from '~/components/SortFilter';
@@ -88,6 +88,16 @@ export async function loader({params, request, context}: LoaderArgs) {
     });
   }
 
+  const variantsPaginationLimit =
+    Number(searchParams.get('paginationLimit')) || 1;
+  const disableCache = searchParams.get('disableCache') === '1';
+
+  const cachePolicy = disableCache
+    ? context.storefront.CacheNone()
+    : context.storefront.CacheShort();
+
+  const initialTime = new Date().getTime();
+
   const {collection, collections} = await context.storefront.query<{
     collection: CollectionType;
     collections: CollectionConnection;
@@ -101,12 +111,19 @@ export async function loader({params, request, context}: LoaderArgs) {
       reverse,
       country: context.storefront.i18n.country,
       language: context.storefront.i18n.language,
+      variantsPageBy: variantsPaginationLimit,
     },
+    cache: cachePolicy,
   });
 
   if (!collection) {
     throw new Response('collection', {status: 404});
   }
+
+  const endTime = new Date().getTime();
+  console.log(`disableCache: ${disableCache}`);
+  console.log(`variantsPaginationLimit: ${variantsPaginationLimit}`);
+  console.log(`Collection query time: ${endTime - initialTime}ms`);
 
   const collectionNodes = flattenConnection(collections);
   const seo = seoPayload.collection({collection, url: request.url});
@@ -134,6 +151,8 @@ export async function loader({params, request, context}: LoaderArgs) {
 export default function Collection() {
   const {collection, collections, appliedFilters} =
     useLoaderData<typeof loader>();
+
+  console.log(collection.products.nodes[0]);
 
   return (
     <>
@@ -167,7 +186,7 @@ export default function Collection() {
 }
 
 const COLLECTION_QUERY = `#graphql
-  ${PRODUCT_CARD_FRAGMENT}
+  ${PRODUCT_CARD_WITH_GROUP_FRAGMENT}
   query CollectionDetails(
     $handle: String!
     $country: CountryCode
@@ -177,6 +196,7 @@ const COLLECTION_QUERY = `#graphql
     $filters: [ProductFilter!]
     $sortKey: ProductCollectionSortKeys!
     $reverse: Boolean
+    $variantsPageBy: Int = 1
   ) @inContext(country: $country, language: $language) {
     collection(handle: $handle) {
       id
