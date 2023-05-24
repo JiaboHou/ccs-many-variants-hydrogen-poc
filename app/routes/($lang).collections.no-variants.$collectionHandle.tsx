@@ -9,7 +9,7 @@ import {flattenConnection, AnalyticsPageType} from '@shopify/hydrogen';
 import invariant from 'tiny-invariant';
 import {PageHeader, Section, Text, SortFilter} from '~/components';
 import {ProductGrid} from '~/components/ProductGrid';
-import {PRODUCT_CARD_WITH_GROUP_FRAGMENT} from '~/data/fragments';
+import {PRODUCT_CARD_WITH_GROUP_FRAGMENT_NO_VARIANTS} from '~/data/fragments';
 import {CACHE_SHORT, routeHeaders} from '~/data/cache';
 import {seoPayload} from '~/lib/seo.server';
 import type {AppliedFilter, SortParam} from '~/components/SortFilter';
@@ -88,8 +88,6 @@ export async function loader({params, request, context}: LoaderArgs) {
     });
   }
 
-  const variantPaginationLimit =
-    Number(searchParams.get('paginationLimit')) || 1;
   const productPaginationLimit =
     Number(searchParams.get('productPaginationLimit')) || PAGINATION_SIZE;
   const disableCache = searchParams.get('disableCache') === '1';
@@ -113,7 +111,6 @@ export async function loader({params, request, context}: LoaderArgs) {
       reverse,
       country: context.storefront.i18n.country,
       language: context.storefront.i18n.language,
-      variantsPageBy: variantPaginationLimit,
     },
     cache: cachePolicy,
   });
@@ -124,7 +121,6 @@ export async function loader({params, request, context}: LoaderArgs) {
 
   const endTime = new Date().getTime();
   console.log(`disableCache: ${disableCache}`);
-  console.log(`variantPaginationLimit: ${variantPaginationLimit}`);
   console.log(`Collection query time: ${endTime - initialTime}ms`);
 
   const collectionNodes = flattenConnection(collections);
@@ -153,8 +149,6 @@ export async function loader({params, request, context}: LoaderArgs) {
 export default function Collection() {
   const {collection, collections, appliedFilters} =
     useLoaderData<typeof loader>();
-
-  console.log(collection.products.nodes[0]);
 
   return (
     <>
@@ -188,7 +182,7 @@ export default function Collection() {
 }
 
 const COLLECTION_QUERY = `#graphql
-  ${PRODUCT_CARD_WITH_GROUP_FRAGMENT}
+  ${PRODUCT_CARD_WITH_GROUP_FRAGMENT_NO_VARIANTS}
   query CollectionDetails(
     $handle: String!
     $country: CountryCode
@@ -198,7 +192,6 @@ const COLLECTION_QUERY = `#graphql
     $filters: [ProductFilter!]
     $sortKey: ProductCollectionSortKeys!
     $reverse: Boolean
-    $variantsPageBy: Int = 1
   ) @inContext(country: $country, language: $language) {
     collection(handle: $handle) {
       id

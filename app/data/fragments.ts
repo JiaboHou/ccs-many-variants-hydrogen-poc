@@ -177,3 +177,59 @@ export const PRODUCT_CARD_WITH_GROUP_FRAGMENT = `#graphql
     }
   }
 `;
+
+export const PRODUCT_CARD_WITH_GROUP_FRAGMENT_NO_VARIANTS = `#graphql
+  ${PRODUCT_COLORWAY_FRAGMENT}
+  fragment ProductCard on Product {
+    id
+    title
+    publishedAt
+    handle
+    availableForSale
+    priceRange {
+      minVariantPrice {
+        amount
+        currencyCode
+      }
+      maxVariantPrice {
+        amount
+        currencyCode
+      }
+    }
+    options {
+      name
+      values
+    }
+    featuredImage {
+      altText
+      height
+      id
+      url
+      width
+    }
+    ...ProductColorway
+    productGroup: metafield(namespace: "custom", key: "product_group") {
+      id
+      value
+      reference {
+        ... on Metaobject {
+          id
+          handle
+          field(key: "products") {
+            key
+            value
+            references (first: 100) {
+              nodes {
+                ... on Product {
+                  id
+                  title
+                  ...ProductColorway
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`;

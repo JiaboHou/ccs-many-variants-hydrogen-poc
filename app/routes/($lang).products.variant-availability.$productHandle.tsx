@@ -259,7 +259,6 @@ function ProductOptionLinks({
       ),
     [product, searchParams, option.name],
   );
-  // console.log('otherSelectedOptions', otherSelectedOptions)
 
   // Get list of variants that match otherSelectedOptions.
   const siblingVariants = useMemo(
