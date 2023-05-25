@@ -47,6 +47,14 @@ export async function loader({params, request, context}: LoaderArgs) {
 
   const searchParams = new URL(request.url).searchParams;
 
+  const disableCache = 'disableCache';
+  const paginationLimit = 'paginationLimit';
+  const disableVariantsCache = searchParams.get(disableCache) === '1';
+  searchParams.delete(disableCache);
+  const variantPaginationLimit = Number(searchParams.get(paginationLimit));
+  searchParams.delete(paginationLimit);
+
+
   const selectedOptions: SelectedOptionInput[] = [];
   searchParams.forEach((value, name) => {
     selectedOptions.push({name, value});
@@ -87,11 +95,9 @@ export async function loader({params, request, context}: LoaderArgs) {
     url: request.url,
   });
 
-  const disableCache = 'disableCache';
-  const paginationLimit = 'paginationLimit';
   const variants = getAllProductVariants(context.storefront, product.id, {
-    disableCache: searchParams.get(disableCache) === '1',
-    paginationLimit: Number(searchParams.get(paginationLimit)),
+    disableCache: disableVariantsCache,
+    paginationLimit: variantPaginationLimit,
   });
 
   return defer(
