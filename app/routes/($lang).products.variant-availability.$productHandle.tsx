@@ -140,7 +140,7 @@ export default function Product() {
             <section className="flex flex-col w-full max-w-xl gap-8 p-6 md:mx-auto md:max-w-sm md:px-0">
               <div className="grid gap-2">
                 <Heading as="h1" className="whitespace-normal">
-                  {title}
+                  STAGING - {title}
                 </Heading>
                 {vendor && (
                   <Text className={'opacity-50 font-medium'}>{vendor}</Text>
